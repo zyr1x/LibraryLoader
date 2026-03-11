@@ -50,16 +50,32 @@ class PomResolver(private val repositories: Map<String, String>) {
 
     private fun parseProperties(doc: org.w3c.dom.Document): Map<String, String> {
         val properties = mutableMapOf<String, String>()
+
+        // Добавляем project.version и project.parent.version
+        doc.documentElement.getTagValue("version")?.let {
+            properties["project.version"] = it
+        }
+
+        val parentNodes = doc.getElementsByTagName("parent")
+        if (parentNodes.length > 0) {
+            val parent = parentNodes.item(0) as Element
+            parent.getTagValue("version")?.let {
+                properties["project.parent.version"] = it
+                // иногда используется просто ${parent.version}
+                properties["parent.version"] = it
+            }
+        }
+
+        // Остальные properties из <properties>
         val nodes = doc.getElementsByTagName("properties")
-        if (nodes.length == 0) return properties
-
-        val propsElement = nodes.item(0) as Element
-        val children = propsElement.childNodes
-
-        for (i in 0 until children.length) {
-            val node = children.item(i)
-            if (node.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
-                properties[node.nodeName] = node.textContent.trim()
+        if (nodes.length > 0) {
+            val propsElement = nodes.item(0) as Element
+            val children = propsElement.childNodes
+            for (i in 0 until children.length) {
+                val node = children.item(i)
+                if (node.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
+                    properties[node.nodeName] = node.textContent.trim()
+                }
             }
         }
 

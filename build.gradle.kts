@@ -1,10 +1,15 @@
 plugins {
-    kotlin("jvm") version "2.2.21"
+    java
     `maven-publish`
 }
 
 group = "ru.lewis"
-version = "1.0.5-SNAPSHOT"
+version = "1.2.0-SNAPSHOT"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
 
 repositories {
     mavenCentral()
@@ -12,7 +17,7 @@ repositories {
 
 publishing {
     publications {
-        register<MavenPublication>("maven") {  // ← добавь это
+        register<MavenPublication>("maven") {
             from(components["java"])
         }
     }

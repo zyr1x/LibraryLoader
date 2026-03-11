@@ -13,11 +13,7 @@ object ClassLoaderInjector {
     }
 
     fun buildClassLoader(parent: ClassLoader): URLClassLoader {
-        val appUrls = (parent as? URLClassLoader)?.urLs?.toList()
-            ?: getAppClassPath()
-
-        val allUrls = (appUrls + urls).toTypedArray()
-        return URLClassLoader(allUrls, null)
+        return URLClassLoader(urls.toTypedArray(), parent)
     }
 
     private fun getAppClassPath(): List<URL> {

@@ -51,6 +51,14 @@ pluginManagement {
 plugins {
     id("ru.lewis.plugin.libraryloader") version "1.0.0"
 }
+
+repositories {
+	maven("https://jitpack.io")
+}
+
+dependencies {
+    implementation("com.github.zyr1x:LibraryLoader:1.0.0")
+}
 ```
 
 ### 2. Объяви зависимости
@@ -102,25 +110,6 @@ public class App {
 
 ---
 
-## 📦 Runtime либа
-
-Подключи `LibraryLoader` в свой проект:
-
-```kotlin
-dependencies {
-    implementation("ru.lewis:LibraryLoader:1.0-SNAPSHOT")
-}
-```
-
-```kotlin
-repositories {
-    mavenCentral()
-    maven("https://maven.pkg.github.com/zyr1x/library-loader")
-}
-```
-
----
-
 ## ⚙️ Конфигурация
 
 ### Gradle плагин
@@ -167,24 +156,6 @@ libraryLoader {
 ```
 
 Скопы `test`, `provided`, `system` и `optional` зависимости **игнорируются**.
-
----
-
-## 🎯 Для Minecraft плагинов
-
-```kotlin
-class MyPlugin : JavaPlugin() {
-    override fun onEnable() {
-        val loader = LibraryLoader(
-            libDir = File(dataFolder, "libraries"),
-            classLoader = javaClass.classLoader,
-            logger = logger
-        ).load()
-
-        // либы загружены, можно использовать
-    }
-}
-```
 
 ---
 

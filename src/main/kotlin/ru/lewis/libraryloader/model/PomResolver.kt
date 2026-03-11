@@ -1,35 +1,47 @@
 package ru.lewis.libraryloader.model
 
+import org.apache.maven.model.Model
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.xml.parsers.DocumentBuilderFactory
-import org.w3c.dom.Element
 
 class PomResolver(private val repositories: Map<String, String>) {
+
+    private val reader = MavenXpp3Reader()
+
     fun resolve(dependency: Dependency, visited: MutableSet<String> = mutableSetOf()): List<Dependency> {
         val key = dependency.toString()
         if (key in visited) return emptyList()
         visited.add(key)
 
-        val pom = fetchPom(dependency) ?: return emptyList()
+        val model = fetchPom(dependency) ?: return emptyList()
         val result = mutableListOf<Dependency>()
-        val properties = parseProperties(pom)
-        val managedVersions = parseDependencyManagement(pom, properties)
-        val deps = parseDependencies(pom, properties, managedVersions)
+
+        val resolvedModel = resolveModel(model)
+        val deps = resolvedModel.dependencies
 
         deps.forEach { dep ->
-            result.add(dep)
-            result.addAll(resolve(dep, visited))
+            val scope = dep.scope ?: "compile"
+            val optional = dep.isOptional
+
+            if (scope in listOf("test", "provided", "system")) return@forEach
+            if (optional) return@forEach
+
+            val version = dep.version ?: return@forEach
+            val resolved = Dependency(dep.groupId, dep.artifactId, version)
+
+            result.add(resolved)
+            result.addAll(resolve(resolved, visited))
         }
 
         return result
     }
 
-    private fun fetchPom(dependency: Dependency): org.w3c.dom.Document? {
+    private fun fetchPom(dependency: Dependency): Model? {
         val pomPath = dependency.toPomPath()
 
-        for ((_, url) in repositories) {
-            val fullUrl = "${url.trimEnd('/')}/$pomPath"
+        for ((_, baseUrl) in repositories) {
+            val fullUrl = "${baseUrl.trimEnd('/')}/$pomPath"
             try {
                 val connection = URL(fullUrl).openConnection() as HttpURLConnection
                 connection.connectTimeout = 10_000
@@ -37,9 +49,7 @@ class PomResolver(private val repositories: Map<String, String>) {
 
                 if (connection.responseCode != 200) continue
 
-                return DocumentBuilderFactory.newInstance()
-                    .newDocumentBuilder()
-                    .parse(connection.inputStream)
+                return connection.inputStream.use { reader.read(it) }
             } catch (e: Exception) {
                 continue
             }
@@ -48,117 +58,42 @@ class PomResolver(private val repositories: Map<String, String>) {
         return null
     }
 
-    private fun parseProperties(doc: org.w3c.dom.Document): Map<String, String> {
-        val properties = mutableMapOf<String, String>()
+    /**
+     * Резолвим плейсхолдеры ${...} и dependencyManagement в модели.
+     */
+    private fun resolveModel(model: Model): Model {
+        // Собираем properties: из <properties> + project.version + parent.version
+        val props = mutableMapOf<String, String>()
 
-        // Добавляем project.version и project.parent.version
-        doc.documentElement.getTagValue("version")?.let {
-            properties["project.version"] = it
+        model.parent?.version?.let {
+            props["project.parent.version"] = it
+            props["parent.version"] = it
+        }
+        (model.version ?: model.parent?.version)?.let {
+            props["project.version"] = it
+        }
+        model.properties.forEach { k, v -> props[k.toString()] = v.toString() }
+
+        // dependencyManagement → карта group:artifact -> version
+        val managed = model.dependencyManagement?.dependencies
+            ?.associate { "${it.groupId}:${it.artifactId}" to it.version.resolve(props) }
+            ?: emptyMap()
+
+        // Резолвим версии в зависимостях
+        model.dependencies.forEach { dep ->
+            dep.groupId = dep.groupId.resolve(props)
+            dep.artifactId = dep.artifactId.resolve(props)
+            dep.version = (dep.version?.resolve(props))
+                ?: managed["${dep.groupId}:${dep.artifactId}"]
         }
 
-        val parentNodes = doc.getElementsByTagName("parent")
-        if (parentNodes.length > 0) {
-            val parent = parentNodes.item(0) as Element
-            parent.getTagValue("version")?.let {
-                properties["project.parent.version"] = it
-                // иногда используется просто ${parent.version}
-                properties["parent.version"] = it
-            }
-        }
-
-        // Остальные properties из <properties>
-        val nodes = doc.getElementsByTagName("properties")
-        if (nodes.length > 0) {
-            val propsElement = nodes.item(0) as Element
-            val children = propsElement.childNodes
-            for (i in 0 until children.length) {
-                val node = children.item(i)
-                if (node.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
-                    properties[node.nodeName] = node.textContent.trim()
-                }
-            }
-        }
-
-        return properties
+        return model
     }
 
-    private fun parseDependencyManagement(
-        doc: org.w3c.dom.Document,
-        properties: Map<String, String>
-    ): Map<String, String> {
-        val managed = mutableMapOf<String, String>()
-        val mgmtNodes = doc.getElementsByTagName("dependencyManagement")
-        if (mgmtNodes.length == 0) return managed
-
-        val depNodes = (mgmtNodes.item(0) as Element)
-            .getElementsByTagName("dependency")
-
-        for (i in 0 until depNodes.length) {
-            val dep = depNodes.item(i) as Element
-            val group    = dep.getTagValue("groupId") ?: continue
-            val artifact = dep.getTagValue("artifactId") ?: continue
-            val version  = dep.getTagValue("version")?.resolvePlaceholder(properties) ?: continue
-            managed["$group:$artifact"] = version
-        }
-
-        return managed
-    }
-
-    private fun parseDependencies(
-        doc: org.w3c.dom.Document,
-        properties: Map<String, String>,
-        managedVersions: Map<String, String>
-    ): List<Dependency> {
-        val result = mutableListOf<Dependency>()
-
-        val root = doc.documentElement
-        val depsNodes = root.childNodes
-
-        var inDependencies = false
-        for (i in 0 until depsNodes.length) {
-            val node = depsNodes.item(i)
-            if (node.nodeName == "dependencies") {
-                inDependencies = true
-                val depNodes = (node as Element).getElementsByTagName("dependency")
-
-                for (j in 0 until depNodes.length) {
-                    val dep = depNodes.item(j) as Element
-
-                    val group    = dep.getTagValue("groupId") ?: continue
-                    val artifact = dep.getTagValue("artifactId") ?: continue
-                    val scope    = dep.getTagValue("scope") ?: "compile"
-                    val optional = dep.getTagValue("optional") ?: "false"
-
-                    // Пропускаем test, provided, system и optional
-                    if (scope in listOf("test", "provided", "system")) continue
-                    if (optional == "true") continue
-
-                    val version = dep.getTagValue("version")
-                        ?.resolvePlaceholder(properties)
-                        ?: managedVersions["$group:$artifact"]
-                        ?: continue
-
-                    result.add(Dependency(group, artifact, version))
-                }
-                break
-            }
-        }
-
-        return result
-    }
-
-    private fun Element.getTagValue(tag: String): String? {
-        val nodes = getElementsByTagName(tag)
-        if (nodes.length == 0) return null
-        return nodes.item(0).textContent.trim().ifBlank { null }
-    }
-
-    private fun String.resolvePlaceholder(properties: Map<String, String>): String {
-        if (!contains("\${")) return this
+    private fun String?.resolve(props: Map<String, String>): String? {
+        if (this == null || !contains("\${")) return this
         var result = this
-        properties.forEach { (key, value) ->
-            result = result.replace("\${$key}", value)
-        }
+        props.forEach { (key, value) -> result = result!!.replace("\${$key}", value) }
         return result
     }
 }

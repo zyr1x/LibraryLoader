@@ -8,7 +8,8 @@ import java.util.logging.Logger
 class LibraryLoader(
     private val libDir: File,
     private val classLoader: ClassLoader = ClassLoader.getSystemClassLoader(),
-    private val logger: Logger? = null
+    private val logger: Logger? = null,
+    private val extraJars: List<File> = emptyList()
 ) {
     fun load(): ClassLoader {
         val resource = classLoader.getResourceAsStream("libraries.toml")
@@ -51,8 +52,7 @@ class LibraryLoader(
             .split(File.pathSeparator)
             .map { File(it).toURI().toURL() }
 
-        val allUrls = (appUrls + downloadedUrls).toTypedArray()
-
+        val allUrls = (downloadedUrls + extraJars.map { it.toURI().toURL() }).toTypedArray()
         return ChildFirstClassLoader(allUrls, classLoader)
     }
 }

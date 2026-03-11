@@ -49,7 +49,7 @@ pluginManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("io.github.zyr1x.libraryloader") version "1.0.0"
+    id("io.github.zyr1x.libraryloader") version "1.0.1"
 }
 
 repositories {
@@ -57,7 +57,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.zyr1x:LibraryLoader:1.0.0")
+    implementation("com.github.zyr1x:LibraryLoader:1.0.4")
 }
 ```
 

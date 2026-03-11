@@ -1,5 +1,6 @@
 package ru.lewis.libraryloader
 
+import ru.lewis.libraryloader.model.ChildFirstClassLoader
 import ru.lewis.libraryloader.model.PomResolver
 import java.io.File
 import java.util.logging.Logger
@@ -22,28 +23,36 @@ class LibraryLoader(
 
         libDir.mkdirs()
 
-        val downloader   = Downloader(libDir)
-        val pomResolver  = PomResolver(config.repositories)
+        val downloader  = Downloader(libDir)
+        val pomResolver = PomResolver(config.repositories)
 
-        // Резолвим все зависимости включая транзитивные
         val allDependencies = config.libraries
             .flatMap { dep ->
                 logger?.info("[LibraryLoader] Resolving tree for $dep...")
                 listOf(dep) + pomResolver.resolve(dep)
             }
-            .distinctBy { it.toString() }  // убираем дубли
+            .distinctBy { it.toString() }
+
+        // собираем URL'ы скачанных jar'ов
+        val downloadedUrls = mutableListOf<java.net.URL>()
 
         allDependencies.forEach { dep ->
             try {
                 logger?.info("[LibraryLoader] Downloading $dep...")
                 val file = downloader.download(dep, config.repositories)
-                ClassLoaderInjector.inject(file, classLoader)
+                downloadedUrls.add(file.toURI().toURL())  // ← собираем сюда
                 logger?.info("[LibraryLoader] Loaded ${dep.toFileName()}")
             } catch (e: Exception) {
                 logger?.warning("[LibraryLoader] Skipped $dep: ${e.message}")
             }
         }
 
-        return ClassLoaderInjector.buildClassLoader(classLoader)
+        val appUrls = System.getProperty("java.class.path")
+            .split(File.pathSeparator)
+            .map { File(it).toURI().toURL() }
+
+        val allUrls = (appUrls + downloadedUrls).toTypedArray()
+
+        return ChildFirstClassLoader(allUrls, classLoader)
     }
 }

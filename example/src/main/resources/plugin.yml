@@ -1,0 +1,16 @@
+name: TestPlugin        # Имя плагина
+version: 1.0.0          # Версия
+main: ru.lewis.testplugin.bootstrap.TestPlugin
+api-version: 1.16      # Версия API сервера (можешь убрать, если не важно)
+
+# Описание и авторы (необязательно)
+description: Пример тестового плагина
+author: Хозяин
+authors:
+  - Хозяин
+
+commands:
+  test:
+    description: Пример команды
+    usage: /<command>
+    aliases: [tst]

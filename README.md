@@ -7,35 +7,35 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
 </p>
 
-> Gradle плагин + runtime либа для загрузки зависимостей **во время запуска** приложения, а не во время сборки. Держи свой `.jar` лёгким — пусть зависимости скачиваются сами.
+> A Gradle plugin + runtime library for downloading dependencies **at application startup** instead of bundling them at build time. Keep your `.jar` lightweight — let dependencies download themselves.
 
 ---
 
-## ✨ Как это работает
+## ✨ How it works
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  БИЛД (Gradle плагин)                               │
-│  - читает объявленные зависимости                   │
-│  - генерирует libraries.toml внутрь jar'а           │
+│  BUILD (Gradle Plugin)                              │
+│  - reads declared dependencies                      │
+│  - generates libraries.toml inside the jar          │
 └─────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────┐
-│  РАНТАЙМ (LibraryLoader)                            │
-│  - читает libraries.toml из ресурсов jar'а          │
-│  - скачивает jar'ы в указанную папку                │
-│  - резолвит транзитивные зависимости через pom.xml  │
-│  - загружает всё в ClassLoader                      │
+│  RUNTIME (LibraryLoader)                            │
+│  - reads libraries.toml from jar resources          │
+│  - downloads jars into a specified folder           │
+│  - resolves transitive dependencies via pom.xml     │
+│  - injects everything into the ClassLoader          │
 └─────────────────────────────────────────────────────┘
 ```
 
-Повторный запуск — **скачивания не будет**, всё берётся из кэша.
+On subsequent runs — **no downloading**, everything is taken from cache.
 
 ---
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### 1. Подключи плагин
+### 1. Apply the plugin
 
 ```kotlin
 // settings.gradle.kts
@@ -49,11 +49,11 @@ pluginManagement {
 ```kotlin
 // build.gradle.kts
 plugins {
-    id("ru.lewis.plugin.libraryloader") version "1.0.0"
+    id("io.github.zyr1x.libraryloader") version "1.0.0"
 }
 
 repositories {
-	maven("https://jitpack.io")
+    maven("https://jitpack.io")
 }
 
 dependencies {
@@ -61,35 +61,35 @@ dependencies {
 }
 ```
 
-### 2. Объяви зависимости
+### 2. Declare dependencies
 
 ```kotlin
 libraryLoader {
-    // кастомный репозиторий (опционально)
+    // custom repository (optional)
     repository("panda", "https://repo.panda-lang.org/releases")
 
-    // зависимости — скачаются при первом запуске
+    // dependencies — will be downloaded on first run
     library("dev.rollczi:litecommands-bukkit:3.10.9")
     library("com.google.guava:guava:33.0.0-jre")
     library("org.reflections:reflections:0.10.2")
 }
 ```
 
-> **Maven Central** добавляется автоматически — не нужно объявлять вручную.
+> **Maven Central** is added automatically — no need to declare it manually.
 
-### 3. Используй LibraryLoader в коде
+### 3. Use LibraryLoader in your code
 
 ```java
-// Main.java — точка входа, никаких импортов загружаемых либ!
+// Main.java — entry point, no imports from downloaded libs here!
 public class Main {
     public static void main(String[] args) throws Exception {
         ClassLoader loader = new LibraryLoader(
-            new File("libraries"),          // папка для кэша
+            new File("libraries"),          // cache folder
             Main.class.getClassLoader(),    // classloader
-            Logger.getAnonymousLogger()     // логгер (null если не нужен)
+            Logger.getAnonymousLogger()     // logger (or null)
         ).load();
 
-        // запускаем основной класс через новый classloader
+        // launch the main class via the new classloader
         loader.loadClass("com.example.App")
               .getMethod("main", String[].class)
               .invoke(null, (Object) args);
@@ -98,10 +98,10 @@ public class Main {
 ```
 
 ```java
-// App.java — здесь уже можно импортировать загруженные либы
+// App.java — here you can freely import downloaded libs
 public class App {
     public static void main(String[] args) {
-        // зависимости уже загружены и доступны
+        // dependencies are already loaded and available
         Reflections reflections = new Reflections("com.example");
         // ...
     }
@@ -110,26 +110,26 @@ public class App {
 
 ---
 
-## ⚙️ Конфигурация
+## ⚙️ Configuration
 
-### Gradle плагин
+### Gradle Plugin
 
-| Метод | Описание |
+| Method | Description |
 |---|---|
-| `repository(name, url)` | Добавить Maven репозиторий |
-| `library(notation)` | Добавить зависимость в формате `group:artifact:version` |
+| `repository(name, url)` | Add a Maven repository |
+| `library(notation)` | Add a dependency in `group:artifact:version` format |
 
 ### LibraryLoader (runtime)
 
-| Параметр | Тип | Описание |
+| Parameter | Type | Description |
 |---|---|---|
-| `libDir` | `File` | Папка для скачивания и кэширования jar'ов |
-| `classLoader` | `ClassLoader` | ClassLoader в который инжектятся зависимости |
-| `logger` | `Logger?` | Логгер (передай `null` если не нужен) |
+| `libDir` | `File` | Folder for downloading and caching jars |
+| `classLoader` | `ClassLoader` | ClassLoader to inject dependencies into |
+| `logger` | `Logger?` | Logger instance (pass `null` if not needed) |
 
 ---
 
-## 📁 Структура после первого запуска
+## 📁 Folder structure after first run
 
 ```
 libraries/
@@ -143,43 +143,57 @@ libraries/
 
 ---
 
-## 🔄 Транзитивные зависимости
+## 🔄 Transitive Dependencies
 
-LibraryLoader **автоматически резолвит транзитивные зависимости** через парсинг `pom.xml`.
+LibraryLoader **automatically resolves transitive dependencies** by parsing `pom.xml`.
 
 ```kotlin
 libraryLoader {
-    // укажи только прямую зависимость
+    // just declare the direct dependency
     library("org.reflections:reflections:0.10.2")
-    // slf4j, javassist и другие подтянутся автоматически ↑
+    // slf4j, javassist and others will be pulled in automatically ↑
 }
 ```
 
-Скопы `test`, `provided`, `system` и `optional` зависимости **игнорируются**.
+Dependencies with scopes `test`, `provided`, `system` and `optional` are **ignored**.
 
 ---
 
-## ❗ Важно
-
-> **Не импортируй** классы из загружаемых либ в точке входа (`Main`). JVM резолвит импорты при загрузке класса — до того как `LibraryLoader` успеет что-либо скачать. Выноси логику в отдельный класс (`App`) и загружай его через рефлексию.
+```kotlin
+class MyPlugin : JavaPlugin() {
+    override fun onEnable() {
+        val loader = LibraryLoader(
+            libDir = File(dataFolder, "libraries"),
+            classLoader = javaClass.classLoader,
+            logger = logger
+        ).load()
+    }
+}
+```
 
 ---
 
-## 🛠️ Сборка из исходников
+## ❗ Important
+
+> **Do not import** classes from downloaded libraries in your entry point (`Main`). The JVM resolves imports when the class is loaded — before `LibraryLoader` has a chance to download anything. Move your logic to a separate class (`App`) and load it via reflection.
+
+---
+
+## 🛠️ Building from source
 
 ```bash
 git clone https://github.com/zyr1x/library-loader
 cd library-loader
 
-# публикация плагина локально
+# publish plugin locally
 ./gradlew :lib:publishToMavenLocal
 
-# публикация runtime либы локально
+# publish runtime library locally
 ./gradlew :LibraryLoader:publishToMavenLocal
 ```
 
 ---
 
-## 📄 Лицензия
+## 📄 License
 
-MIT — делай что хочешь.
+MIT — do whatever you want.

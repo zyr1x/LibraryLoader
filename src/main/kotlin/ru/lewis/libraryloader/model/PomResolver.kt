@@ -4,11 +4,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
-import org.w3c.dom.NodeList
 
 class PomResolver(private val repositories: Map<String, String>) {
-
-    // Резолвим все транзитивные зависимости рекурсивно
     fun resolve(dependency: Dependency, visited: MutableSet<String> = mutableSetOf()): List<Dependency> {
         val key = dependency.toString()
         if (key in visited) return emptyList()
@@ -16,18 +13,12 @@ class PomResolver(private val repositories: Map<String, String>) {
 
         val pom = fetchPom(dependency) ?: return emptyList()
         val result = mutableListOf<Dependency>()
-
-        // Читаем properties для подстановки версий типа ${project.version}
         val properties = parseProperties(pom)
-
-        // Читаем dependencyManagement для дефолтных версий
         val managedVersions = parseDependencyManagement(pom, properties)
-
         val deps = parseDependencies(pom, properties, managedVersions)
 
         deps.forEach { dep ->
             result.add(dep)
-            // Рекурсивно резолвим транзитивные
             result.addAll(resolve(dep, visited))
         }
 
@@ -104,7 +95,6 @@ class PomResolver(private val repositories: Map<String, String>) {
     ): List<Dependency> {
         val result = mutableListOf<Dependency>()
 
-        // Берём только прямые dependencies (не из dependencyManagement)
         val root = doc.documentElement
         val depsNodes = root.childNodes
 

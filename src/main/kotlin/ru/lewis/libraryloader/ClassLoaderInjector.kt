@@ -13,12 +13,10 @@ object ClassLoaderInjector {
     }
 
     fun buildClassLoader(parent: ClassLoader): URLClassLoader {
-        // добавляем classpath самого приложения
         val appUrls = (parent as? URLClassLoader)?.urLs?.toList()
             ?: getAppClassPath()
 
         val allUrls = (appUrls + urls).toTypedArray()
-        // parent = null чтобы не делегировать системному classloader
         return URLClassLoader(allUrls, null)
     }
 

@@ -1,4 +1,3 @@
-```markdown
 # 📦 LibraryLoader Gradle Plugin
 
 <p align="center">
@@ -13,7 +12,6 @@
 ---
 
 ## ✨ How it works
-
 ```
 ┌─────────────────────────────────────────────────────┐
 │  BUILD (Gradle Plugin)                              │
@@ -38,7 +36,6 @@ On subsequent runs — **no downloading**, everything is taken from cache.
 ## 🚀 Quick Start
 
 ### 1. Apply the plugin
-
 ```kotlin
 // settings.gradle.kts
 pluginManagement {
@@ -47,7 +44,6 @@ pluginManagement {
     }
 }
 ```
-
 ```kotlin
 // build.gradle.kts
 plugins {
@@ -64,7 +60,6 @@ dependencies {
 ```
 
 ### 2. Declare dependencies
-
 ```kotlin
 libraryLoader {
     // custom repository (optional)
@@ -80,7 +75,6 @@ libraryLoader {
 > **Maven Central** is added automatically — no need to declare it manually.
 
 ### 3. Use LibraryInjector in your code
-
 ```java
 // Main.java — entry point
 public class Main {
@@ -100,7 +94,6 @@ public class Main {
     }
 }
 ```
-
 ```java
 // App.java — here you can freely import downloaded libs
 import org.reflections.Reflections;
@@ -121,7 +114,6 @@ public class App {
 ## 🎯 Fluent Builder API
 
 ### Simple injection (no constructor arguments)
-
 ```java
 LibraryInjector injector = new LibraryLoaderInjector(new File("libraries"));
 
@@ -131,7 +123,6 @@ MyPlugin plugin = injector.prepare(MyPlugin.class)
 ```
 
 ### Injection with constructor arguments
-
 ```java
 Config config = new Config();
 Repository repo = new Repository();
@@ -148,7 +139,6 @@ MyService service = injector.prepare(MyService.class)
 ### Injection with explicit parameter types
 
 Useful when you have overloaded constructors or need to pass primitives:
-
 ```java
 // explicit type specification
 MyService service = injector.prepare(MyService.class)
@@ -160,7 +150,6 @@ MyService service = injector.prepare(MyService.class)
 ```
 
 ### Injection by class name
-
 ```java
 // load class by name (useful for plugins/dynamic loading)
 Object instance = injector.prepare("com.example.DynamicPlugin", Object.class)
@@ -174,7 +163,6 @@ Plugin plugin = injector.prepare("com.example.MyPlugin", Plugin.class)
 ```
 
 ### Access to ClassLoader
-
 ```java
 // get isolated ClassLoader for manual operations
 ClassLoader loader = injector.getClassLoader();
@@ -223,7 +211,6 @@ Class<?> clazz = loader.loadClass("com.example.SomeClass");
 ---
 
 ## 📁 Folder structure after first run
-
 ```
 libraries/
 ├── dev/rollczi/litecommands-bukkit/3.10.9/
@@ -239,7 +226,6 @@ libraries/
 ## 🔄 Transitive Dependencies
 
 LibraryInjector **automatically resolves transitive dependencies** by parsing `pom.xml`.
-
 ```kotlin
 libraryLoader {
     // just declare the direct dependency
@@ -253,7 +239,6 @@ Dependencies with scopes `test`, `provided`, `system` and `optional` are **ignor
 ---
 
 ## 🎮 Minecraft Plugin Example
-
 ```java
 public class MyPlugin extends JavaPlugin {
     
@@ -292,7 +277,6 @@ public class MyPlugin extends JavaPlugin {
     }
 }
 ```
-
 ```java
 // PluginCore.java — with downloaded dependencies
 import dev.rollczi.litecommands.LiteCommands;
@@ -325,7 +309,6 @@ public class PluginCore {
 ## 🔧 Advanced Usage Examples
 
 ### Complex constructor with multiple dependencies
-
 ```java
 DatabaseConfig dbConfig = new DatabaseConfig("localhost", 5432);
 CacheConfig cacheConfig = new CacheConfig(1000);
@@ -341,7 +324,6 @@ Application app = injector.prepare(Application.class)
 ```
 
 ### Working with primitives and wrappers
-
 ```java
 // explicit types to handle primitives correctly
 MyService service = injector.prepare(MyService.class)
@@ -353,7 +335,6 @@ MyService service = injector.prepare(MyService.class)
 ```
 
 ### Plugin system with dynamic loading
-
 ```java
 // load multiple plugins dynamically
 List<String> pluginClasses = Arrays.asList(
@@ -375,7 +356,6 @@ for (String className : pluginClasses) {
 ```
 
 ### With extra jar files
-
 ```java
 List<File> extraJars = Arrays.asList(
     new File("plugins/MyPlugin/custom-lib.jar"),
@@ -395,7 +375,6 @@ MyPlugin plugin = injector.prepare(MyPlugin.class)
 ```
 
 ### Multiple isolated environments
-
 ```java
 // create separate isolated environments with different dependencies
 LibraryInjector injector1 = new LibraryLoaderInjector(new File("libs1"));
@@ -410,7 +389,6 @@ Plugin2 plugin2 = injector2.prepare(Plugin2.class)
 ```
 
 ### Reusing the builder pattern
-
 ```java
 // you can reuse the builder for similar instances
 var builder = injector.prepare(Worker.class)
@@ -434,7 +412,6 @@ Worker worker2 = builder.build();  // creates new instance with same args
 ✅ **IDE-friendly** — autocomplete works perfectly with the fluent API
 
 ### Comparison: Direct vs Builder
-
 ```java
 // Without builder (varargs approach)
 MyService service = injector.inject(MyService.class, config, repo, logger, 42);
@@ -463,7 +440,6 @@ The builder approach is more verbose but significantly clearer, especially with 
 ---
 
 ## 🛠️ Building from source
-
 ```bash
 git clone https://github.com/zyr1x/library-loader
 cd library-loader
@@ -480,4 +456,3 @@ cd library-loader
 ## 📄 License
 
 MIT — do whatever you want.
-```

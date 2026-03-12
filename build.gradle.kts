@@ -1,14 +1,13 @@
 plugins {
     java
     `maven-publish`
+    kotlin("jvm")
 }
 
 group = "ru.lewis"
-version = "1.2.0-SNAPSHOT"
+version = "1.3.0-SNAPSHOT"
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_16
-    targetCompatibility = JavaVersion.VERSION_16
 }
 
 repositories {
@@ -25,4 +24,8 @@ publishing {
 
 dependencies {
     implementation("org.apache.maven:maven-model:3.9.6")
+    implementation(kotlin("stdlib-jdk8"))
+}
+kotlin {
+    jvmToolchain(16)
 }

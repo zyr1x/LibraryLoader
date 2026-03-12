@@ -12,7 +12,6 @@
 ---
 
 ## ✨ How it works
-
 ```
 ┌─────────────────────────────────────────────────────┐
 │  BUILD (Gradle Plugin)                              │
@@ -21,11 +20,12 @@
 └─────────────────────────────────────────────────────┘
                         ↓
 ┌─────────────────────────────────────────────────────┐
-│  RUNTIME (LibraryLoader)                            │
+│  RUNTIME (LibraryInjector)                          │
 │  - reads libraries.toml from jar resources          │
 │  - downloads jars into a specified folder           │
 │  - resolves transitive dependencies via pom.xml     │
-│  - injects everything into the ClassLoader          │
+│  - creates isolated ClassLoader                     │
+│  - injects classes with dependency resolution       │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -36,7 +36,6 @@ On subsequent runs — **no downloading**, everything is taken from cache.
 ## 🚀 Quick Start
 
 ### 1. Apply the plugin
-
 ```kotlin
 // settings.gradle.kts
 pluginManagement {
@@ -45,7 +44,6 @@ pluginManagement {
     }
 }
 ```
-
 ```kotlin
 // build.gradle.kts
 plugins {
@@ -57,12 +55,11 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.zyr1x:LibraryLoader:1.0.4")
+    implementation("com.github.zyr1x:LibraryLoader:1.3.0")
 }
 ```
 
 ### 2. Declare dependencies
-
 ```kotlin
 libraryLoader {
     // custom repository (optional)
@@ -77,35 +74,75 @@ libraryLoader {
 
 > **Maven Central** is added automatically — no need to declare it manually.
 
-### 3. Use LibraryLoader in your code
-
+### 3. Use LibraryInjector in your code
 ```java
-// Main.java — entry point, no imports from downloaded libs here!
+// Main.java — entry point
 public class Main {
     public static void main(String[] args) throws Exception {
-        ClassLoader loader = new LibraryLoader(
+        LibraryInjector injector = new LibraryLoaderInjector(
             new File("libraries"),          // cache folder
-            Main.class.getClassLoader(),    // classloader
-            Logger.getAnonymousLogger()     // logger (or null)
-        ).load();
+            Main.class.getClassLoader(),    // parent classloader
+            Logger.getAnonymousLogger(),    // logger (or null)
+            Collections.emptyList()         // extra jars (optional)
+        );
 
-        // launch the main class via the new classloader
-        loader.loadClass("com.example.App")
-              .getMethod("main", String[].class)
-              .invoke(null, (Object) args);
+        // create instance of your main class with isolated dependencies
+        App app = injector.inject(App.class);
+        app.run(args);
+    }
+}
+```
+```java
+// App.java — here you can freely import downloaded libs
+import org.reflections.Reflections;
+import com.google.common.collect.Lists;
+
+public class App {
+    public void run(String[] args) {
+        // dependencies are already loaded and available
+        Reflections reflections = new Reflections("com.example");
+        List<String> list = Lists.newArrayList("a", "b", "c");
+        // ...
     }
 }
 ```
 
+---
+
+## 🎯 Injection Methods
+
+### Simple injection (no constructor arguments)
 ```java
-// App.java — here you can freely import downloaded libs
-public class App {
-    public static void main(String[] args) {
-        // dependencies are already loaded and available
-        Reflections reflections = new Reflections("com.example");
-        // ...
-    }
-}
+LibraryInjector injector = new LibraryLoaderInjector(new File("libraries"));
+
+// create instance with default constructor
+MyPlugin plugin = injector.inject(MyPlugin.class);
+```
+
+### Injection with constructor arguments
+```java
+// create instance with dependencies
+Config config = new Config();
+Repository repo = new Repository();
+
+MyService service = injector.inject(MyService.class, config, repo);
+```
+
+### Injection by class name
+```java
+// load class by name (useful for plugins/dynamic loading)
+Object instance = injector.inject(
+    "com.example.DynamicPlugin",
+    Object.class  // expected type for casting
+);
+```
+
+### Access to ClassLoader
+```java
+// get isolated ClassLoader for manual operations
+ClassLoader loader = injector.getClassLoader();
+
+Class<?> clazz = loader.loadClass("com.example.SomeClass");
 ```
 
 ---
@@ -119,18 +156,28 @@ public class App {
 | `repository(name, url)` | Add a Maven repository |
 | `library(notation)` | Add a dependency in `group:artifact:version` format |
 
-### LibraryLoader (runtime)
+### LibraryLoaderInjector (runtime)
+
+#### Constructor parameters:
 
 | Parameter | Type | Description |
 |---|---|---|
 | `libDir` | `File` | Folder for downloading and caching jars |
-| `classLoader` | `ClassLoader` | ClassLoader to inject dependencies into |
-| `logger` | `Logger?` | Logger instance (pass `null` if not needed) |
+| `parent` | `ClassLoader` | Parent ClassLoader (default: `ClassLoader.getSystemClassLoader()`) |
+| `logger` | `Logger` | Logger instance (pass `null` if not needed) |
+| `extraJars` | `List<File>` | Additional jar files to include (optional) |
+
+#### Methods:
+
+| Method | Description |
+|---|---|
+| `inject(Class<T>, Object...)` | Create instance with constructor arguments |
+| `inject(String, Class<T>, Object...)` | Create instance by class name |
+| `getClassLoader()` | Get isolated ClassLoader |
 
 ---
 
 ## 📁 Folder structure after first run
-
 ```
 libraries/
 ├── dev/rollczi/litecommands-bukkit/3.10.9/
@@ -145,8 +192,7 @@ libraries/
 
 ## 🔄 Transitive Dependencies
 
-LibraryLoader **automatically resolves transitive dependencies** by parsing `pom.xml`.
-
+LibraryInjector **automatically resolves transitive dependencies** by parsing `pom.xml`.
 ```kotlin
 libraryLoader {
     // just declare the direct dependency
@@ -159,28 +205,109 @@ Dependencies with scopes `test`, `provided`, `system` and `optional` are **ignor
 
 ---
 
-```kotlin
-class MyPlugin : JavaPlugin() {
-    override fun onEnable() {
-        val loader = LibraryLoader(
-            libDir = File(dataFolder, "libraries"),
-            classLoader = javaClass.classLoader,
-            logger = logger
-        ).load()
+## 🎮 Minecraft Plugin Example
+```java
+public class MyPlugin extends JavaPlugin {
+    
+    private LibraryInjector injector;
+    private PluginCore core;
+    
+    @Override
+    public void onEnable() {
+        try {
+            // initialize injector
+            injector = new LibraryLoaderInjector(
+                new File(getDataFolder(), "libraries"),
+                getClass().getClassLoader(),
+                getLogger(),
+                Collections.emptyList()
+            );
+            
+            // inject plugin core with dependencies
+            core = injector.inject(PluginCore.class, this);
+            core.enable();
+            
+        } catch (Exception e) {
+            getLogger().severe("Failed to load libraries: " + e.getMessage());
+            getServer().getPluginManager().disablePlugin(this);
+        }
+    }
+    
+    @Override
+    public void onDisable() {
+        if (core != null) {
+            core.disable();
+        }
+    }
+}
+```
+```java
+// PluginCore.java — with downloaded dependencies
+import dev.rollczi.litecommands.LiteCommands;
+import org.reflections.Reflections;
+
+public class PluginCore {
+    private final JavaPlugin plugin;
+    private LiteCommands commands;
+    
+    public PluginCore(JavaPlugin plugin) {
+        this.plugin = plugin;
+    }
+    
+    public void enable() {
+        // use downloaded libraries
+        Reflections reflections = new Reflections("com.example.commands");
+        // initialize LiteCommands, etc.
+    }
+    
+    public void disable() {
+        if (commands != null) {
+            commands.unregister();
+        }
     }
 }
 ```
 
 ---
 
+## 🔧 Advanced Usage
+
+### With extra jar files
+```java
+List<File> extraJars = Arrays.asList(
+    new File("plugins/MyPlugin/custom-lib.jar"),
+    new File("plugins/MyPlugin/another-lib.jar")
+);
+
+LibraryInjector injector = new LibraryLoaderInjector(
+    new File("libraries"),
+    ClassLoader.getSystemClassLoader(),
+    null,
+    extraJars  // will be added to isolated ClassLoader
+);
+```
+
+### Multiple instances
+```java
+// create multiple isolated instances with different dependencies
+LibraryInjector injector1 = new LibraryLoaderInjector(new File("libs1"));
+LibraryInjector injector2 = new LibraryLoaderInjector(new File("libs2"));
+
+Plugin1 plugin1 = injector1.inject(Plugin1.class);
+Plugin2 plugin2 = injector2.inject(Plugin2.class);
+```
+
+---
+
 ## ❗ Important
 
-> **Do not import** classes from downloaded libraries in your entry point (`Main`). The JVM resolves imports when the class is loaded — before `LibraryLoader` has a chance to download anything. Move your logic to a separate class (`App`) and load it via reflection.
+> **ClassLoader Isolation**: Each `LibraryInjector` creates a `ChildFirstClassLoader` that prioritizes loaded libraries over parent classloader. This prevents conflicts but means classes from different injectors cannot directly interact.
+
+> **Constructor Arguments**: When passing arguments to `inject()`, the method will try to find a matching constructor. If you have overloaded constructors, it uses the first compatible match based on argument types.
 
 ---
 
 ## 🛠️ Building from source
-
 ```bash
 git clone https://github.com/zyr1x/library-loader
 cd library-loader

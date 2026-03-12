@@ -55,7 +55,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.zyr1x:LibraryLoader:1.0.4")
+    implementation("com.github.zyr1x:LibraryLoader:1.3.0")
 }
 ```
 

@@ -2,44 +2,29 @@ package ru.lewis.testplugin.bootstrap;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import ru.lewis.libraryloader.LibraryLoader;
+import ru.lewis.libraryloader.LibraryInjector;
+import ru.lewis.libraryloader.LibraryLoaderInjector;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.List;
+import java.util.Collections;
 
 public class TestPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
-        ClassLoader classLoader = null;
         try {
-            classLoader = new LibraryLoader(
+            LibraryInjector injector = new LibraryLoaderInjector(
                     this.getDataFolder().toPath().resolve("libraries").toFile(),
                     this.getClassLoader(),
                     this.getLogger(),
-                    List.of()
-            ).load();
+                    Collections.emptyList()
+            );
+
+            Object app = injector.prepare("ru.lewis.testplugin.App", Object.class)
+                    .withTypes(Plugin.class)
+                    .with((Plugin) this)
+                    .build();
+
+            app.getClass().getMethod("enable").invoke(app);
         } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        try {
-            Class<?> appClass = classLoader.loadClass("ru.lewis.testplugin.App");
-            Object app = appClass.getDeclaredConstructor(Plugin.class).newInstance(this);
-            Method method = appClass.getMethod("enable");
-            method.invoke(app);
-
-            Class<?> gsonClass = Class.forName("com.google.gson.Gson", true, classLoader);
-            getLogger().info("Gson class loaded: " + gsonClass);
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (InvocationTargetException e) {
-            throw new RuntimeException(e);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
     }
